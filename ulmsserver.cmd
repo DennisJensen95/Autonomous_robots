@@ -1,0 +1,3 @@
+quit
+zoneobst
+quir
