@@ -104,29 +104,41 @@ typedef struct{//input
     double dist;
     double angle;
     double left_pos,right_pos;
+
     // parameters
     double w;
+
     //output
     double motorspeed_l,motorspeed_r;
     int finished;
+
     // internal variables
     double startpos;
+
     // Crossing a line
     int crossing_line;
+
     // Which linesensor is activated
     double k_line_sensor[7];
+
     // Center of mass
     double co_mass;
+
     // Speed step for specific acceleration
     double speed_step;
     double vmax;
     double vmax_angle;
+
     // Regulators_values
     double reg_move_fwd;
     double reg_fwl_line;
     double inte_fwl_line;
     double inte_move_fwd;
     double last_error_fwl;
+
+    // Last iteration linesensorvalues
+    double last_itera_linesensor[7];
+
 }motiontype;
 
 enum {mot_stop=1,mot_move,mot_turn,mot_fwl};
@@ -142,8 +154,8 @@ int fwl_mid(double dist, double speed,int time);
 * Calibrations
 */
 
-void norm_linesensor(symTableElement *linesensor, double *norm_values, int black, int white);
-double co_mass(double *calib, char state);
+void norm_linesensor(symTableElement *linesensor, double *norm_values, int black, int white, char *line_state);
+double co_mass(double *calib, char *line_state);
 int crossing_line(double *calib, double threshold_crossing_limit);
 
 /********************************************
@@ -156,6 +168,7 @@ typedef struct{
 }smtype;
 
 void sm_update(smtype *p, motiontype *mot, odotype *c);
+void init_last_itera_zero(double *line_sensor_values);
 
 /********************************************
 * Regulators
@@ -187,7 +200,7 @@ motiontype mot;
 * Missions
 */
 
-enum {ms_init,ms_fwd,ms_turn,ms_end,ms_fwl, ms_turn_180};
+enum {ms_init,ms_fwd,ms_turn,ms_end,ms_fwl, ms_turn_180, ms_find_gate};
 
 
 
@@ -195,11 +208,12 @@ int main()
 {
     // Calibration for robot 6
 //    int running, n=0, arg, time=0, black=54, white=75;
-    int running, n=0, arg, time=0, black=85, white=255;
+    int running, n=0, arg, time=0, black=85, white=255, crossing_lines = 1;
     double angle=0, speed=0.4, acceleration=0.5, angular_acceleration=1, threshold_crossing_limit = 0.2;
-    int log_laser = 0, log_motion = 1, log_linesensor = 0, stop_at_line = 0;
-    char line_state = "l";
-    moving.dist = 2;
+    int log_laser = 1, log_motion = 0, log_linesensor = 0, stop_at_line = 0;
+    char line_state[2] = "bm";
+    moving.dist = 4;
+
     // Initialize integrator value to zero
     mot.inte_fwl_line = 0;
     mot.last_error_fwl = 0;
@@ -338,7 +352,7 @@ int main()
         odo.right_enc=renc->data[0];
 
         // Calibrate linesensor values
-        norm_linesensor(linesensor, norm_linesensor_values, black, white);
+        norm_linesensor(linesensor, norm_linesensor_values, black, white, line_state);
 
         // Find center of mass
         mot.co_mass = co_mass(norm_linesensor_values, line_state);
@@ -347,10 +361,18 @@ int main()
         mot.crossing_line = crossing_line(norm_linesensor_values, threshold_crossing_limit);
 
         if (stop_at_line == 1 && mot.crossing_line == 1) {
+            crossing_lines += 1;
             mission.state = ms_end;
-        } else if (stop_at_line == 0 && mot.crossing_line == 1) {
-            mot.dist = 0.2;
+        } else if (stop_at_line == 0 && mot.crossing_line == 1 && crossing_lines == 0) {
+            crossing_lines += 1;
+            mot.dist = 0.10;
             mission.state = ms_fwd;
+        } else if (stop_at_line == 0 && mot.crossing_line == 1 && crossing_lines == 1) {
+            crossing_lines += 1;
+            mot.dist = 5;
+            mission.state = ms_find_gate;
+        } else if (mission.time >= 200) {
+            mission.state = ms_end;
         }
 
         update_odo(&odo);
@@ -366,7 +388,7 @@ int main()
                 break;
 
             case ms_fwd:
-                if (fwd(moving.dist, mot.speed_step, mission.time))  mission.state=ms_turn;
+                if (fwd(moving.dist, mot.speed_step, mission.time))  mission.state=ms_fwl;
                 break;
 
             case ms_turn:
@@ -395,6 +417,11 @@ int main()
                 angle = 180/180*M_PI;
                 if (turn(angle, mot.speed_step, mission.time)) mission.state=ms_fwl;
                 break;
+
+            case ms_find_gate:
+                mot.cmd = mot_stop;
+                break;
+
 
 
         }
@@ -425,9 +452,11 @@ int main()
         speedl->updated=1;
         speedr->data[0]=100*mot.motorspeed_r;
         speedr->updated=1;
+
         if (time  % 100 ==0) {
             time++;
         }
+        printf(" laser %f \n",laserpar[3]);
 
         if (log_motion == 1) {
             // Making motion data
@@ -442,15 +471,11 @@ int main()
         }
 
         if (log_linesensor == 1) {
-//             Making linesensor data
+            //Making linesensor data
             fprintf(fp_line, "%d %d %d %d %d %d %d %d\n", linesensor->data[0], linesensor->data[1], linesensor->data[2],
             linesensor->data[3], linesensor->data[4], linesensor->data[5], linesensor->data[6], linesensor->data[7]);
-
-//            fprintf(fp_line, "%f %f %f %f %f %f %f %f\n", norm_linesensor_values[0], norm_linesensor_values[1],
-//                    norm_linesensor_values[2], norm_linesensor_values[3],
-//                    norm_linesensor_values[4], norm_linesensor_values[5],
-//                    norm_linesensor_values[6], norm_linesensor_values[7]);
         }
+
 
 
 
@@ -718,33 +743,44 @@ void sm_update(smtype *p, motiontype *mot, odotype *c){
  / Calibration functions
 */
 
-void norm_linesensor(symTableElement *linesensor, double  *norm_values, int black, int white) {
+void norm_linesensor(symTableElement *linesensor, double  *norm_values, int black, int white, char *line_state) {
     int i;
     for (i = 0; i < 7; i++) {
-        if (linesensor->data[i] < black) {
+        if (linesensor->data[i] < black && line_state[0] == 'b') {
             norm_values[i] = 0;
         }
-        else if (linesensor->data[i] > white) {
+        else if (linesensor->data[i] < black && line_state[0] == 'w') {
             norm_values[i] = 1;
         }
+        else if (linesensor->data[i] > white && line_state[0] == 'b') {
+            norm_values[i] = 1;
+        }
+        else if (linesensor->data[i] > white && line_state[0] == 'w') {
+            norm_values[i] = 0;
+        }
         else {
-            norm_values[i] =  (double) (linesensor->data[i] - black)/(white-black);
+            if (line_state[0] == 'b') {
+                norm_values[i] =  (double) (linesensor->data[i] - black)/(white-black);
+            }
+            else {
+                norm_values[i] = 1 - (double) (linesensor->data[i] - black)/(white-black);
+            }
         }
     }
 }
 
-double co_mass(double *calib, char line_state) {
+double co_mass(double *calib, char *line_state) {
     double numerator = 0, denominator = 0, center = 3.0;
     int i;
     for (i = 0; i < 8; i++) {
         numerator += calib[i] * i;
         denominator += calib[i];
     }
-    if (line_state == 'm') {
+    if (line_state[1] == 'm') {
         center = 3.0;
-    } else if (line_state == 'l') {
+    } else if (line_state[1] == 'l') {
         center = 3.25;
-    } else if (line_state == 'r') {
+    } else if (line_state[1] == 'r') {
         center = 2.75;
     }
 
@@ -766,7 +802,7 @@ double get_control_fwl(motiontype *mot, smtype *sm) {
     double derivative = 0.00005 * (mot->co_mass - mot->last_error_fwl)/0.01;
     mot->last_error_fwl = mot->co_mass;
 
-    printf("prop: %f, integral: %f, derivative: %f, co_mass: %f\n", prop, mot->inte_fwl_line, derivative, mot->co_mass);
+//    printf("prop: %f, integral: %f, derivative: %f, co_mass: %f\n", prop, mot->inte_fwl_line, derivative, mot->co_mass);
 
     return prop + mot->inte_fwl_line + derivative;
 }
@@ -778,7 +814,6 @@ double get_control_fwl(motiontype *mot, smtype *sm) {
 int crossing_line(double *calib, double threshold_crossing_limit) {
     unsigned int i = 0, line = 0;
     for (i = 0; i < 8; i++) {
-
         if (calib[i] >= 0-threshold_crossing_limit && calib[i] <= 0+threshold_crossing_limit) {
             line = 1;
         } else {

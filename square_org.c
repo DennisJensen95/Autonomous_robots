@@ -294,7 +294,7 @@ while (running){
   speedr->data[0]=100*mot.motorspeed_r;
   speedr->updated=1;
   if (time  % 100 ==0)
-    //    printf(" laser %f \n",laserpar[3]);
+
   time++;
 /* stop if keyboard is activated
 *
