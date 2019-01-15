@@ -31,6 +31,7 @@ struct {
 double visionpar[10];
 double laserpar[10];
 double norm_linesensor_values[8];
+double ir_calib_sensor_values[5];
 
 void serverconnect(componentservertype *s);
 void xml_proc(struct xml_in *x);
@@ -124,6 +125,9 @@ typedef struct{//input
     // Center of mass
     double co_mass;
 
+    // Detect obstacle
+    int ir_detect;
+
     // Speed step for specific acceleration
     double speed_step;
     double vmax;
@@ -155,8 +159,10 @@ int fwl_mid(double dist, double speed,int time);
 */
 
 void norm_linesensor(symTableElement *linesensor, double *norm_values, int black, int white, char *line_state);
+void calib_ir_sensor(symTableElement *irsensor, double *ir_calib_sensor_values);
 double co_mass(double *calib, char *line_state);
 int crossing_line(double *calib, double threshold_crossing_limit);
+int ir_detect(double *ir_calib);
 
 /********************************************
 * Initializations
@@ -208,9 +214,9 @@ int main()
 {
     // Calibration for robot 6
 //    int running, n=0, arg, time=0, black=54, white=75;
-    int running, n=0, arg, time=0, black=85, white=255, crossing_lines = 1;
-    double angle=0, speed=0.4, acceleration=0.5, angular_acceleration=1, threshold_crossing_limit = 0.2;
-    int log_laser = 1, log_motion = 0, log_linesensor = 0, stop_at_line = 0;
+    int running, n=0, arg, time=0, black=85, white=255, crossing_lines = 1, ir_obst_stop = 1;
+    double angle=0, speed=0.2, acceleration=0.5, angular_acceleration=1, threshold_crossing_limit = 0.2;
+    int log_laser = 0, log_motion = 0, log_linesensor = 0, stop_at_line = 0;
     char line_state[2] = "bm";
     moving.dist = 4;
 
@@ -354,6 +360,12 @@ int main()
         // Calibrate linesensor values
         norm_linesensor(linesensor, norm_linesensor_values, black, white, line_state);
 
+        // Calibrate irsensor values
+        calib_ir_sensor(irsensor, ir_calib_sensor_values);
+
+        // IR sensor detecting if obst comes to close
+        mot.ir_detect = ir_detect(ir_calib_sensor_values);
+
         // Find center of mass
         mot.co_mass = co_mass(norm_linesensor_values, line_state);
 
@@ -371,7 +383,12 @@ int main()
             crossing_lines += 1;
             mot.dist = 5;
             mission.state = ms_find_gate;
-        } else if (mission.time >= 200) {
+        } else if (mission.time >= 20000) {
+            mission.state = ms_end;
+        }
+
+        // Vehicle stops if there is a nearby obst or wall at irfl, irfm, irfr
+        if (ir_obst_stop == 1 && mot.ir_detect == 1){
             mission.state = ms_end;
         }
 
@@ -384,7 +401,7 @@ int main()
         switch (mission.state) {
             case ms_init:
                 n=4; angle=90.0/180*M_PI;
-                mission.state = ms_fwl;
+                mission.state = ms_fwd;
                 break;
 
             case ms_fwd:
@@ -456,7 +473,13 @@ int main()
         if (time  % 100 ==0) {
             time++;
         }
+
+        /*
         printf(" laser %f \n",laserpar[3]);
+        */
+
+        //printf(" irfl %f \n", ir_calib_sensor_values[2]);
+        //printf(" %f %d \n", ir_calib_sensor_values[2], irsensor->data[2]);
 
         if (log_motion == 1) {
             // Making motion data
@@ -769,6 +792,14 @@ void norm_linesensor(symTableElement *linesensor, double  *norm_values, int blac
     }
 }
 
+void calib_ir_sensor(symTableElement *irsensor, double *ir_calib_sensor_values){
+    int i;
+    double Ka = 15.8463, Kb = 74.6344;
+    for (i = 0; i < 5; i++){
+        ir_calib_sensor_values[i] = Ka/(irsensor->data[i] - Kb);
+    }
+}
+
 double co_mass(double *calib, char *line_state) {
     double numerator = 0, denominator = 0, center = 3.0;
     int i;
@@ -822,4 +853,17 @@ int crossing_line(double *calib, double threshold_crossing_limit) {
         }
     }
     return line;
+}
+
+int ir_detect(double *ir_calib){
+    unsigned int i, stop = 0;
+    for (i = 1; i < 4; i++){
+        if (ir_calib[i] <= 0.2){
+            stop = 1;
+        } else {
+            stop = 0;
+            break;
+        }
+    }
+    return stop;
 }
