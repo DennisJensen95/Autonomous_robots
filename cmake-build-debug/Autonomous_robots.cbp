@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6"/>
+	<Project>
+		<Option title="Autonomous_robots"/>
+		<Option makefile_is_custom="1"/>
+		<Option compiler="gcc"/>
+		<Option virtualFolders="CMake Files\;"/>
+		<Build>
+			<Target title="all">
+				<Option working_dir="/Users/admin/SMR_common_folder/GIT/Autonomous_robots/cmake-build-debug"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j4 -f &quot;/Users/admin/SMR_common_folder/GIT/Autonomous_robots/cmake-build-debug/Makefile&quot;  VERBOSE=1 all"/>
+					<CompileFile command="/usr/bin/make -j4 -f &quot;/Users/admin/SMR_common_folder/GIT/Autonomous_robots/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j4 -f &quot;/Users/admin/SMR_common_folder/GIT/Autonomous_robots/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j4 -f &quot;/Users/admin/SMR_common_folder/GIT/Autonomous_robots/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="rebuild_cache">
+				<Option working_dir="/Users/admin/SMR_common_folder/GIT/Autonomous_robots/cmake-build-debug"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j4 -f &quot;/Users/admin/SMR_common_folder/GIT/Autonomous_robots/cmake-build-debug/Makefile&quot;  VERBOSE=1 rebuild_cache"/>
+					<CompileFile command="/usr/bin/make -j4 -f &quot;/Users/admin/SMR_common_folder/GIT/Autonomous_robots/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j4 -f &quot;/Users/admin/SMR_common_folder/GIT/Autonomous_robots/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j4 -f &quot;/Users/admin/SMR_common_folder/GIT/Autonomous_robots/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="edit_cache">
+				<Option working_dir="/Users/admin/SMR_common_folder/GIT/Autonomous_robots/cmake-build-debug"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j4 -f &quot;/Users/admin/SMR_common_folder/GIT/Autonomous_robots/cmake-build-debug/Makefile&quot;  VERBOSE=1 edit_cache"/>
+					<CompileFile command="/usr/bin/make -j4 -f &quot;/Users/admin/SMR_common_folder/GIT/Autonomous_robots/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j4 -f &quot;/Users/admin/SMR_common_folder/GIT/Autonomous_robots/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j4 -f &quot;/Users/admin/SMR_common_folder/GIT/Autonomous_robots/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="Autonomous_robots">
+				<Option output="/Users/admin/SMR_common_folder/GIT/Autonomous_robots/cmake-build-debug/Autonomous_robots" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/Users/admin/SMR_common_folder/GIT/Autonomous_robots/cmake-build-debug"/>
+				<Option object_output="./"/>
+				<Option type="1"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/Library/Developer/CommandLineTools/usr/lib/clang/10.0.0/include"/>
+					<Add directory="/Library/Developer/CommandLineTools/usr/include"/>
+					<Add directory="/System/Library/Frameworks"/>
+					<Add directory="/Library/Frameworks"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j4 -f &quot;/Users/admin/SMR_common_folder/GIT/Autonomous_robots/cmake-build-debug/Makefile&quot;  VERBOSE=1 Autonomous_robots"/>
+					<CompileFile command="/usr/bin/make -j4 -f &quot;/Users/admin/SMR_common_folder/GIT/Autonomous_robots/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j4 -f &quot;/Users/admin/SMR_common_folder/GIT/Autonomous_robots/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j4 -f &quot;/Users/admin/SMR_common_folder/GIT/Autonomous_robots/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="Autonomous_robots/fast">
+				<Option output="/Users/admin/SMR_common_folder/GIT/Autonomous_robots/cmake-build-debug/Autonomous_robots" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/Users/admin/SMR_common_folder/GIT/Autonomous_robots/cmake-build-debug"/>
+				<Option object_output="./"/>
+				<Option type="1"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/Library/Developer/CommandLineTools/usr/lib/clang/10.0.0/include"/>
+					<Add directory="/Library/Developer/CommandLineTools/usr/include"/>
+					<Add directory="/System/Library/Frameworks"/>
+					<Add directory="/Library/Frameworks"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j4 -f &quot;/Users/admin/SMR_common_folder/GIT/Autonomous_robots/cmake-build-debug/Makefile&quot;  VERBOSE=1 Autonomous_robots/fast"/>
+					<CompileFile command="/usr/bin/make -j4 -f &quot;/Users/admin/SMR_common_folder/GIT/Autonomous_robots/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j4 -f &quot;/Users/admin/SMR_common_folder/GIT/Autonomous_robots/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j4 -f &quot;/Users/admin/SMR_common_folder/GIT/Autonomous_robots/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+		</Build>
+		<Unit filename="/Users/admin/SMR_common_folder/GIT/Autonomous_robots/serverif.c">
+			<Option target="Autonomous_robots"/>
+		</Unit>
+		<Unit filename="/Users/admin/SMR_common_folder/GIT/Autonomous_robots/square.c">
+			<Option target="Autonomous_robots"/>
+		</Unit>
+		<Unit filename="/Users/admin/SMR_common_folder/GIT/Autonomous_robots/square_acceleration.c">
+			<Option target="Autonomous_robots"/>
+		</Unit>
+		<Unit filename="/Users/admin/SMR_common_folder/GIT/Autonomous_robots/square_follow_line_without_center.c">
+			<Option target="Autonomous_robots"/>
+		</Unit>
+		<Unit filename="/Users/admin/SMR_common_folder/GIT/Autonomous_robots/square_org.c">
+			<Option target="Autonomous_robots"/>
+		</Unit>
+		<Unit filename="/Users/admin/SMR_common_folder/GIT/Autonomous_robots/square_with_linesensor.c">
+			<Option target="Autonomous_robots"/>
+		</Unit>
+		<Unit filename="/Users/admin/SMR_common_folder/GIT/Autonomous_robots/square_without_controller.c">
+			<Option target="Autonomous_robots"/>
+		</Unit>
+		<Unit filename="/Users/admin/SMR_common_folder/GIT/Autonomous_robots/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\"/>
+		</Unit>
+	</Project>
+</CodeBlocks_project_file>

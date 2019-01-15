@@ -1,6 +1,6 @@
 /*
  * An example SMR program.
- *
+ * Modifcation
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -151,6 +151,9 @@ typedef struct{//input
 
     // Center of mass
     double co_mass;
+
+    // Detect obstacle
+    int ir_detect;
 
     // Speed step for specific acceleration
     double speed_step;
@@ -396,6 +399,7 @@ int main()
 
         // Calibrate linesensor values
         norm_linesensor(linesensor, norm_linesensor_values, black, white, rstate.line_state);
+
         // Find center of mass
         mot.co_mass = co_mass(norm_linesensor_values, rstate.line_state);
 
@@ -412,7 +416,6 @@ int main()
 //        competition_track(&mot, &odo, &mission, &det, &rstate);
         make_square(&mot, &odo, &mission, &det, &rstate);
 
-
         update_odo(&odo);
 
         /****************************************
@@ -421,7 +424,7 @@ int main()
         sm_update(&mission, &mot, &odo);
         switch (mission.state) {
             case ms_init:
-                mission.state = ms_fwl;
+                mission.state = ms_fwd;
                 break;
 
             case ms_fwd:
@@ -791,6 +794,14 @@ void norm_linesensor(symTableElement *linesensor, double  *norm_values, int blac
     }
 }
 
+void calib_ir_sensor(symTableElement *irsensor, double *ir_calib_sensor_values){
+    int i;
+    double Ka = 15.8463, Kb = 74.6344;
+    for (i = 0; i < 5; i++){
+        ir_calib_sensor_values[i] = Ka/(irsensor->data[i] - Kb);
+    }
+}
+
 double co_mass(double *calib, char *line_state) {
     double numerator = 0, denominator = 0, center = 3.0;
     int i;
@@ -807,14 +818,6 @@ double co_mass(double *calib, char *line_state) {
     }
 
     return (numerator/denominator) - center;
-}
-
-void calib_ir_sensor(symTableElement *irsensor, double *ir_calib_sensor_values) {
-    int i;
-    double Ka = 15.8463, Kb = 74.6355;
-    for (i = 0; i < 5; i++) {
-        ir_calib_sensor_values[i] = Ka/(irsensor->data[i] - Kb);
-    }
 }
 
 /****************************************
