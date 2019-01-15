@@ -1,6 +1,6 @@
 /*
  * An example SMR program.
- *
+ * Modifcation
  */
 #include <stdio.h>
 #include <stdlib.h>
