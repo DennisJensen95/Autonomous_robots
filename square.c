@@ -30,7 +30,11 @@ struct {
 
 double visionpar[10];
 double laserpar[10];
+
+// Normalized linesensor putting them from 0-1
 double norm_linesensor_values[8];
+// Calibration of infared sensors (Obstacle detection or measurement in meters after calibration)
+double ir_calib_sensor_values[5];
 
 void serverconnect(componentservertype *s);
 void xml_proc(struct xml_in *x);
@@ -57,6 +61,33 @@ getoutputref (const char *sym_name, symTableElement * tab)
             return &tab[i];
     return 0;
 }
+
+/********************************************
+* Detectors parameters
+*/
+
+typedef struct {
+    // Counting parameters
+    int crossed_lines;
+    int mis_state;
+
+    // Detect obstacles
+    int obstacle_det_ir;
+
+    // Crossing a line
+    int crossing_line;
+}detectors;
+
+/********************************************
+* States
+*/
+
+typedef struct {
+    char line_state[2];
+    double dist;
+
+    double ir_dist_obstacle_det;
+}robot_state;
 
 /*****************************************
 * odometry
@@ -115,9 +146,6 @@ typedef struct{//input
     // internal variables
     double startpos;
 
-    // Crossing a line
-    int crossing_line;
-
     // Which linesensor is activated
     double k_line_sensor[7];
 
@@ -147,7 +175,7 @@ void update_motcon(motiontype *p, odotype *odo);
 
 int fwd(double dist, double speed,int time);
 int turn(double angle, double speed,int time);
-int fwl_mid(double dist, double speed,int time);
+int fwl(double dist, double speed,int time);
 
 
 /********************************************
@@ -157,6 +185,8 @@ int fwl_mid(double dist, double speed,int time);
 void norm_linesensor(symTableElement *linesensor, double *norm_values, int black, int white, char *line_state);
 double co_mass(double *calib, char *line_state);
 int crossing_line(double *calib, double threshold_crossing_limit);
+int ir_detect(double *ir_calib, double ir_dist);
+void calib_ir_sensor(symTableElement *irsensor, double *ir_calib_sensor_values);
 
 /********************************************
 * Initializations
@@ -165,6 +195,7 @@ int crossing_line(double *calib, double threshold_crossing_limit);
 typedef struct{
     int state, oldstate;
     int time;
+    int functions;
 }smtype;
 
 void sm_update(smtype *p, motiontype *mot, odotype *c);
@@ -178,12 +209,11 @@ double get_control_fwd(motiontype *mot, odotype *odo, smtype *sm);
 double get_control_fwl(motiontype *mot, smtype *sm);
 
 /********************************************
-* Motion
+* Track function
 */
 
-typedef struct{
-    double dist;
-}motion;
+void competition_track(motiontype *mot, odotype *odo, smtype *mission, detectors *det, robot_state *rstate);
+void make_square(motiontype *mot, odotype *odo, smtype *mission, detectors *det, robot_state *rstate);
 
 
 // SMR input/output data
@@ -191,32 +221,45 @@ typedef struct{
 symTableElement *inputtable,*outputtable;
 symTableElement *lenc,*renc,*linesensor,*irsensor, *speedl,*speedr,*resetmotorr,*resetmotorl;
 
-motion moving;
+
 odotype odo;
+detectors det;
 smtype mission;
 motiontype mot;
+robot_state rstate;
 
 /********************************************
 * Missions
 */
 
-enum {ms_init,ms_fwd,ms_turn,ms_end,ms_fwl, ms_turn_180, ms_find_gate};
-
-
+enum {ms_init,ms_fwd,ms_turn,ms_end,ms_fwl,ms_turn_180};
 
 int main()
 {
     // Calibration for robot 6
 //    int running, n=0, arg, time=0, black=54, white=75;
-    int running, n=0, arg, time=0, black=85, white=255, crossing_lines = 1;
+    int running, arg, time=0, black=85, white=255;
     double angle=0, speed=0.4, acceleration=0.5, angular_acceleration=1, threshold_crossing_limit = 0.2;
-    int log_laser = 1, log_motion = 0, log_linesensor = 0, stop_at_line = 0;
-    char line_state[2] = "bm";
-    moving.dist = 4;
+    int log_laser = 1, log_motion = 0, log_linesensor = 0;
+
+    // Motion controls
+    mot.angle = 90.0/180*M_PI;
+
+    // Distance for obstacle detection
+    rstate.ir_dist_obstacle_det = 0.2;
+
+    // States
+    rstate.line_state[0] = 'b';
+    rstate.line_state[1] = 'm';
+    rstate.dist = 4;
 
     // Initialize integrator value to zero
     mot.inte_fwl_line = 0;
     mot.last_error_fwl = 0;
+
+    // Detectors states
+    det.crossed_lines = 0;
+    det.mis_state = 0;
 
     /* Establish connection to robot sensors and actuators.
      */
@@ -352,28 +395,23 @@ int main()
         odo.right_enc=renc->data[0];
 
         // Calibrate linesensor values
-        norm_linesensor(linesensor, norm_linesensor_values, black, white, line_state);
-
+        norm_linesensor(linesensor, norm_linesensor_values, black, white, rstate.line_state);
         // Find center of mass
-        mot.co_mass = co_mass(norm_linesensor_values, line_state);
+        mot.co_mass = co_mass(norm_linesensor_values, rstate.line_state);
 
         // Realise if vechicle crosses a line
-        mot.crossing_line = crossing_line(norm_linesensor_values, threshold_crossing_limit);
+        det.crossing_line = crossing_line(norm_linesensor_values, threshold_crossing_limit);
 
-        if (stop_at_line == 1 && mot.crossing_line == 1) {
-            crossing_lines += 1;
-            mission.state = ms_end;
-        } else if (stop_at_line == 0 && mot.crossing_line == 1 && crossing_lines == 0) {
-            crossing_lines += 1;
-            mot.dist = 0.10;
-            mission.state = ms_fwd;
-        } else if (stop_at_line == 0 && mot.crossing_line == 1 && crossing_lines == 1) {
-            crossing_lines += 1;
-            mot.dist = 5;
-            mission.state = ms_find_gate;
-        } else if (mission.time >= 200) {
-            mission.state = ms_end;
-        }
+        // Update obstacle detection
+        calib_ir_sensor(irsensor, ir_calib_sensor_values);
+        det.obstacle_det_ir = ir_detect(ir_calib_sensor_values, rstate.ir_dist_obstacle_det);
+
+        /******************************
+        /  THE MISSION BEING RUNNED!
+        */
+//        competition_track(&mot, &odo, &mission, &det, &rstate);
+        make_square(&mot, &odo, &mission, &det, &rstate);
+
 
         update_odo(&odo);
 
@@ -383,29 +421,21 @@ int main()
         sm_update(&mission, &mot, &odo);
         switch (mission.state) {
             case ms_init:
-                n=4; angle=90.0/180*M_PI;
                 mission.state = ms_fwl;
                 break;
 
             case ms_fwd:
-                if (fwd(moving.dist, mot.speed_step, mission.time))  mission.state=ms_fwl;
+                if (fwd(rstate.dist, mot.speed_step, mission.time))  mission.functions += 1;
                 break;
 
             case ms_turn:
-                if (n==0)
-                    mission.state=ms_end;
-
-                if (turn(angle, mot.speed_step, mission.time)){
-                    n=n-1;
-                    if (n==0)
-                        mission.state=ms_end;
-                    else
-                        mission.state=ms_fwd;
+                if (turn(mot.angle, mot.speed_step, mission.time)){
+                    mission.functions += 1;
                 }
                 break;
 
             case ms_fwl:
-                if (fwl_mid(moving.dist,speed,mission.time))  mission.state=ms_end;
+                if (fwl(rstate.dist,speed,mission.time))  mission.functions += 1;
                 break;
 
             case ms_end:
@@ -415,15 +445,8 @@ int main()
 
             case ms_turn_180:
                 angle = 180/180*M_PI;
-                if (turn(angle, mot.speed_step, mission.time)) mission.state=ms_fwl;
+                if (turn(angle, mot.speed_step, mission.time)) mission.functions += 1;
                 break;
-
-            case ms_find_gate:
-                mot.cmd = mot_stop;
-                break;
-
-
-
         }
         /*  end of mission  */
 
@@ -456,7 +479,6 @@ int main()
         if (time  % 100 ==0) {
             time++;
         }
-        printf(" laser %f \n",laserpar[3]);
 
         if (log_motion == 1) {
             // Making motion data
@@ -710,7 +732,7 @@ int turn(double angle, double speed,int time){
         return mot.finished;
 }
 
-int fwl_mid(double dist, double speed, int time){
+int fwl(double dist, double speed, int time){
     if (time==0){
         mot.cmd=mot_fwl;
         mot.speedcmd=speed;
@@ -787,6 +809,14 @@ double co_mass(double *calib, char *line_state) {
     return (numerator/denominator) - center;
 }
 
+void calib_ir_sensor(symTableElement *irsensor, double *ir_calib_sensor_values) {
+    int i;
+    double Ka = 15.8463, Kb = 74.6355;
+    for (i = 0; i < 5; i++) {
+        ir_calib_sensor_values[i] = Ka/(irsensor->data[i] - Kb);
+    }
+}
+
 /****************************************
  / Regulator values functions
 */
@@ -822,4 +852,67 @@ int crossing_line(double *calib, double threshold_crossing_limit) {
         }
     }
     return line;
+}
+
+int ir_detect(double *ir_calib, double ir_dist) {
+    unsigned int i, stop = 0;
+    for (i = 1; i < 4; i++) {
+        if (ir_calib[i] <= ir_dist) {
+            stop = 1;
+        } else {
+            stop = 0;
+            break;
+        }
+    }
+    return stop;
+}
+
+/********************************************
+* Track function
+*/
+
+void competetion_track(motiontype *mot, odotype *odo, smtype *mission, detectors *det, robot_state *rstate) {
+
+    // Mission 1 measure obstacle
+    if (det->mis_state == 0) {
+        rstate->line_state[1] = 'm';
+        mission->state = ms_fwl;
+
+        if (det->obstacle_det_ir == 1) {
+            mission->state = ms_end;
+        }
+
+        if (det->crossing_line) {
+            mission->state = ms_end;
+        }
+
+        det->mis_state += 1;
+    }
+    else if (det->mis_state == 1) {
+
+    }
+}
+
+void make_square(motiontype *mot, odotype *odo, smtype *mission, detectors *det, robot_state *rstate) {
+    rstate->dist = 1;
+    mot->angle = 90.0/180*M_PI;
+    if (mission->functions == 0) {
+        mission->state = ms_fwd;
+    } else if (mission->functions == 1) {
+        mission->state = ms_turn;
+    } else if (mission->functions == 2) {
+        mission->state = ms_fwd;
+    } else if (mission->functions == 3) {
+        mission->state = ms_turn;
+    } else if (mission->functions == 4) {
+        mission->state = ms_fwd;
+    } else if (mission->functions == 5) {
+        mission->state = ms_turn;
+    } else if (mission->functions == 6) {
+        mission->state = ms_fwd;
+    } else if (mission->functions == 7) {
+        mission->state = ms_turn;
+    } else {
+        mission->state = ms_end;
+    }
 }
