@@ -867,3 +867,7 @@ int ir_detect(double *ir_calib){
     }
     return stop;
 }
+
+void testfun(){
+    return 0;
+}
