@@ -874,7 +874,7 @@ int ir_detect(double *ir_calib, double ir_dist) {
 * Track function
 */
 
-void competetion_track(motiontype *mot, odotype *odo, smtype *mission, detectors *det, robot_state *rstate) {
+void competition_track(motiontype *mot, odotype *odo, smtype *mission, detectors *det, robot_state *rstate) {
 
     // Mission 1 measure obstacle
     if (det->mis_state == 0) {
