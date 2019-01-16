@@ -221,7 +221,7 @@ double get_control_fwl(motiontype *mot, smtype *sm);
 
 void competition_track(motiontype *mot, odotype *odo, smtype *mission, detectors *det, robot_state *rstate);
 void make_square(motiontype *mot, odotype *odo, smtype *mission, detectors *det, robot_state *rstate);
-
+int detect_negative_fork(double com_prev,double com_new);
 
 // SMR input/output data
 
@@ -915,6 +915,7 @@ int ir_detect(double *ir_calib, double ir_dist) {
     return stop;
 }
 
+//Detect fork with branch <90deg , assume step change in line sensor delta_com=0.6
 int detect_negative_fork(motiontype *mot) {
     return (fabs(mot->co_mass) >= fabs(mot->co_mass_prev +0.6));
 }
