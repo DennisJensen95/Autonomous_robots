@@ -69,7 +69,7 @@ getoutputref (const char *sym_name, symTableElement * tab)
 typedef struct {
     // Counting parameters
     int crossed_lines;
-    int mis_state;
+    int mis_state, old_mis_state;
 
     // Detecting forks
     int negative_fork;
@@ -208,10 +208,10 @@ int detect_negative_fork(motiontype *mot);
 typedef struct{
     int state, oldstate;
     int time;
-    int functions;
+    int functions, oldfunction;
 }smtype;
 
-void sm_update(smtype *p, motiontype *mot, odotype *c);
+void sm_update(smtype *p, motiontype *mot, odotype *c, detectors *det);
 void init_last_itera_zero(double *line_sensor_values);
 
 /********************************************
@@ -224,10 +224,18 @@ double get_control_fwl(motiontype *mot, smtype *sm);
 /********************************************
 * Track function
 */
-
 void competition_track(motiontype *mot, odotype *odo, smtype *drive_state, detectors *det, robot_state *rstate);
 void make_square(motiontype *mot, odotype *odo, smtype *drive_state, detectors *det, robot_state *rstate);
-void detect_white_line(motiontype *mot, odotype *odo, smtype *drive_state, detectors *det, robot_state *rstate);
+
+/********************************************
+* Subsections of competition track
+*/
+void first_mission(motiontype *mot, odotype *odo, smtype *drive_state, detectors *det, robot_state *rstate);
+void second_mission(motiontype *mot, odotype *odo, smtype *drive_state, detectors *det, robot_state *rstate);
+void third_mission(motiontype *mot, odotype *odo, smtype *drive_state, detectors *det, robot_state *rstate);
+void fourth_mission(motiontype *mot, odotype *odo, smtype *drive_state, detectors *det, robot_state *rstate);
+void fifth_mission(motiontype *mot, odotype *odo, smtype *drive_state, detectors *det, robot_state *rstate);
+void sixth_mission(motiontype *mot, odotype *odo, smtype *drive_state, detectors *det, robot_state *rstate);
 // SMR input/output data
 
 symTableElement *inputtable,*outputtable;
@@ -257,6 +265,10 @@ int main()
     // Motion controls
     mot.angle = -90.0/180*M_PI;
 
+    // Case function
+    drive_state.functions = 0;
+    drive_state.oldfunction = 0;
+
     // Distance for obstacle detection
     rstate.ir_dist_obstacle_det = 0.2;
 
@@ -274,6 +286,7 @@ int main()
     // Detectors states
     det.crossed_lines = 0;
     det.mis_state = 0;
+    det.old_mis_state = 0;
 
     // Initialize center of mass previous value
     mot.co_mass_prev = 0;
@@ -435,15 +448,15 @@ int main()
         /******************************
         /  THE MISSION BEING RUNNED!
         */
-//        competition_track(&mot, &odo, &drive_state, &det, &rstate);
+        competition_track(&mot, &odo, &drive_state, &det, &rstate);
 //        make_square(&mot, &odo, &drive_state, &det, &rstate);
-        detect_white_line(&mot, &odo, &drive_state, &det, &rstate);
+//        following_white_line(&mot, &odo, &drive_state, &det, &rstate);
 
         /****************************************
         / Update mission
         */
 
-        sm_update(&drive_state, &mot, &odo);
+        sm_update(&drive_state, &mot, &odo, &det);
 
         switch (drive_state.state) {
             case drive_init:
@@ -464,7 +477,6 @@ int main()
 
             case drive_fwl:
                 if (fwl(mot.dist,mot.speed_step,drive_state.time)) {
-                    printf("i did the distance\n");
                     drive_state.functions += 1;
 
                 }
@@ -679,7 +691,7 @@ void update_motcon(motiontype *p, odotype *odo){
         case mot_turn:
             if (p->angle>0){
                 // Divided the angle with 2 for accounting for both wheels
-                printf("%f, %f\n", odo->angle_pos_mission, p->angle);
+//                printf("%f, %f\n", odo->angle_pos_mission, p->angle);
                 if (odo->angle_pos_mission <= p->angle) {
                     if (p->speed_step > fabs(p->vmax_angle)) {
                         if (p->vmax_angle <= 0.01) {
@@ -728,16 +740,16 @@ void update_motcon(motiontype *p, odotype *odo){
             break;
 
         case mot_fwl:
-            printf("Distance gone in following line: %f, The wanted going dist: %f\n",
-                    fabs((p->right_pos+p->left_pos)/2 - p->startpos), p->dist);
+//            printf("Distance gone in following line: %f, The wanted going dist: %f\n",
+//                    fabs((p->right_pos+p->left_pos)/2 - p->startpos), p->dist);
             if (fabs((p->right_pos+p->left_pos)/2 - p->startpos) > p->dist) {
-                printf("Finished fwl line\n");
+//                printf("Finished fwl line\n");
                 p->finished=1;
                 p->motorspeed_l=0;
                 p->motorspeed_r=0;
             }
             else {
-                printf("The constant added to speed depending on co_mass: %f", p->reg_fwl_line);
+//                printf("The constant added to speed depending on co_mass: %f", p->reg_fwl_line);
                 p->motorspeed_r = p->speed_step - p->reg_fwl_line;
                 p->motorspeed_l = p->speed_step + p->reg_fwl_line;
 
@@ -786,15 +798,19 @@ int fwl(double dist, double speed, int time){
  / Updating functions
 */
 
-void sm_update(smtype *p, motiontype *mot, odotype *c){
-    if (p->state!=p->oldstate){
+void sm_update(smtype *p, motiontype *mot, odotype *c, detectors *det){
+    if (p->oldfunction!=p->functions || p->oldstate!=p->state || det->old_mis_state!=det->mis_state) {
+        mot->inte_fwl_line = 0;
+        mot->last_error_fwl = 0;
         printf("Resets mission\n");
         mot->speed_step=0;
         c->left_pos_dec=0;
         c->right_pos_dec=0;
         c->angle_pos_mission=0;
         p->time=0;
+        det->old_mis_state = det->mis_state;
         p->oldstate=p->state;
+        p->oldfunction=p->functions;
     }
     else {
         p->time++;
@@ -846,15 +862,17 @@ double co_mass(double *calib, char *line_state, detectors *det) {
     if (line_state[1] == 'm') {
         center = 3.5;
     } else if (line_state[1] == 'l') {
-        center = 4.5;
+        center = 3.8;
     } else if (line_state[1] == 'r') {
-        center = 2.5;
+        center = 3.2;
     }
 
     for (i = 0; i < 8; i++) {
         numerator += calib[i] * i;
         denominator += calib[i];
     }
+
+    printf("The denominator for co mass: %f\n",denominator);
 
     // To avoid nans and detect lines
     if (denominator <= 2) {
@@ -864,15 +882,19 @@ double co_mass(double *calib, char *line_state, detectors *det) {
 
     if (denominator <= 7.5 && denominator >= 2) {
         det->line_detected = 1;
+    } else {
+        det->line_detected = 0;
     }
 
     // Detect a line end
     if (denominator >= 7.5) {
         det->line_end = 1;
         return 0;
+    } else {
+        det->line_end = 0;
     }
 
-//    printf("The denominator for co mass: %f\n",denominator);
+
 
     return (numerator/denominator) - center;
 }
@@ -889,7 +911,7 @@ double get_control_fwd(motiontype *mot, odotype *odo, smtype *sm) {
 double get_control_fwl(motiontype *mot, smtype *sm) {
     double prop = 0.2 * mot->co_mass;
     mot->inte_fwl_line += 0.04 * mot->co_mass*0.01;
-    double derivative = 0.005 * (mot->co_mass - mot->last_error_fwl)/0.01;
+    double derivative = 0.0005 * (mot->co_mass - mot->last_error_fwl)/0.01;
     mot->last_error_fwl = mot->co_mass;
 
 //    printf("prop: %f, integral: %f, derivative: %f, co_mass: %f\n", prop, mot->inte_fwl_line, derivative, mot->co_mass);
@@ -937,93 +959,36 @@ int detect_negative_fork(motiontype *mot) {
 */
 
 void competition_track(motiontype *mot, odotype *odo, smtype *drive_state, detectors *det, robot_state *rstate) {
-
-    // Mission 1 measure obstacle
+//    printf("%d", det->mis_state);
+    // Mission 1n measure obstacle
     if (det->mis_state == 0) {
-        printf(" Mission 1\n");
-        if (drive_state->functions == 0) {
-            mot->dist = 1.45;
-            rstate->line_state[1] = 'm';
-            drive_state->state = drive_fwl;
-
-            if (det->line_end == 1) {
-                drive_state->state = drive_end;
-            }
-        } else if (drive_state->functions == 1) {
-            mot->angle = -180.0/180*M_PI;
-            drive_state->state = drive_turn;
-        } else if (drive_state->functions == 2) {
-            mot->dist = 2;
-            rstate->line_state[1] = 'm';
-            drive_state->state = drive_fwl;
-
-            if (det->negative_fork == 1) {
-                drive_state->functions = 3;
-            }
-        } else if (drive_state->functions == 3) {
-            mot->dist = 0.2;
-            drive_state->state = drive_fwd;
-        } else if (drive_state->functions == 4) {
-            mot->angle = -120.0 / 180 * M_PI;
-            drive_state->state = drive_turn;
-        } else {
-            det->mis_state = 1;
-            det->crossed_lines = 0;
-            drive_state->functions = 0;
-        }
+        first_mission(mot, odo, drive_state, det, rstate);
     }
 
     // Mission 2
     else if (det->mis_state == 1) {
-        printf(" Second mission!\n");
-        if (drive_state->functions == 0) {
-            printf("Follow line bitch\n");
-            mot->dist = 1.25;
-            rstate->line_state[1] = 'l';
-            drive_state->state = drive_fwl;
+        second_mission(mot, odo, drive_state, det, rstate);
+    }
 
-        } else if (drive_state->functions == 1) {
-            drive_state->time = 0;
-            mot->dist = 2;
-            rstate->line_state[1] = 'm';
-            drive_state->state = drive_fwl;
+    // Mission 3
+    else if (det->mis_state == 2) {
+        third_mission(mot, odo, drive_state, det, rstate);
+    }
 
-            if (det->crossing_line == 1) {
-                printf("Crossing line section");
-                drive_state->functions = 2;
-            }
-        } else if (drive_state->functions == 2) {
-            mot->dist = 0.2;
-            drive_state->state = drive_fwd;
-        } else if (drive_state->functions == 3) {
-            mot->angle = -90.0/180*M_PI;
-            drive_state->state = drive_turn;
-        } else if (drive_state->functions == 4) {
-            mot->dist = 0.1;
-            drive_state->state = drive_fwd;
-        } else if ( drive_state->functions == 5) {
-            mot->dist = 2;
-            drive_state->state = drive_fwl;
+    // Mission 4 Wall
+    else if (det->mis_state == 3) {
+        fourth_mission(mot, odo, drive_state, det, rstate);
+    }
 
-            if (det->crossing_line == 1) {
-                drive_state->functions = 6;
-            }
-        } else if (drive_state->functions == 6) {
-            mot->dist = 0.2;
-            drive_state->state = drive_fwd;
-        } else if (drive_state->functions == 7) {
-            mot->angle = 90.0/180*M_PI;
-            drive_state->state = drive_turn;
-        } else if (drive_state->functions == 8) {
-            mot->dist = 2;
-            rstate->line_state[1] = 'r';
-            drive_state->state = drive_fwl;
 
-            if (det->crossing_line == 1) {
-                drive_state->state = drive_end;
-            }
-        }
+    // Mission 5
+    else if (det->mis_state == 4) {
+        fifth_mission(mot, odo, drive_state, det, rstate);
+    }
 
+    // Mission 6
+    else if (det->mis_state == 5) {
+        sixth_mission(mot, odo, drive_state, det, rstate);
     }
 
 //    printf("Time: (%d) || mission func incre: %d, angle: %f, drive_state: %d, angle turn: %f, negative_fork: %d, mission_state: %d, "
@@ -1031,6 +996,195 @@ void competition_track(motiontype *mot, odotype *odo, smtype *drive_state, detec
 //           drive_state->functions, odo->angle_pos_mission, drive_state->state, mot->angle, det->negative_fork, det->mis_state,
 //           mot->startpos, ((mot->right_pos + mot->left_pos)/2 - mot->startpos), mot->dist, det->crossing_line);
 }
+
+void first_mission(motiontype *mot, odotype *odo, smtype *drive_state, detectors *det, robot_state *rstate) {
+    if (drive_state->functions == 0) {
+        mot->dist = 1.45;
+        rstate->line_state[1] = 'm';
+        drive_state->state = drive_fwl;
+
+        if (det->line_end == 1) {
+            drive_state->state = drive_end;
+        }
+    } else if (drive_state->functions == 1) {
+        mot->angle = -180.0/180*M_PI;
+        drive_state->state = drive_turn;
+    } else if (drive_state->functions == 2) {
+        mot->dist = 2;
+        rstate->line_state[1] = 'm';
+        drive_state->state = drive_fwl;
+
+        if (det->negative_fork == 1) {
+            drive_state->functions = 3;
+        }
+    } else if (drive_state->functions == 3) {
+        mot->dist = 0.2;
+        drive_state->state = drive_fwd;
+    } else if (drive_state->functions == 4) {
+        mot->angle = -120.0 / 180 * M_PI;
+        drive_state->state = drive_turn;
+    } else {
+        det->mis_state = 1;
+        det->crossed_lines = 0;
+        drive_state->functions = 0;
+    }
+}
+
+void second_mission(motiontype *mot, odotype *odo, smtype *drive_state, detectors *det, robot_state *rstate) {
+    if (drive_state->functions == 0) {
+        mot->dist = 0.25;
+        rstate->line_state[1] = 'm';
+        drive_state->state = drive_fwl;
+
+    } else if (drive_state->functions == 1) {
+        mot->dist = 0.75;
+        rstate->line_state[1] = 'l';
+        drive_state->state = drive_fwl;
+    } else if (drive_state->functions == 2) {
+        drive_state->time = 0;
+        mot->dist = 2;
+        rstate->line_state[1] = 'm';
+        drive_state->state = drive_fwl;
+
+        if (det->crossing_line == 1) {
+//                printf("Crossing line section");
+            drive_state->functions = 3;
+        }
+    } else if (drive_state->functions == 3) {
+        mot->dist = 0.2;
+        drive_state->state = drive_fwd;
+    } else if (drive_state->functions == 4) {
+        mot->angle = -90.0/180*M_PI;
+        drive_state->state = drive_turn;
+    } else if (drive_state->functions == 5) {
+        mot->dist = 0.1;
+        drive_state->state = drive_fwd;
+    } else if ( drive_state->functions == 6) {
+        mot->dist = 2;
+        drive_state->state = drive_fwl;
+
+        if (det->crossing_line == 1) {
+            drive_state->functions = 7;
+        }
+    } else if (drive_state->functions == 7) {
+        mot->dist = 0.2;
+        drive_state->state = drive_fwd;
+    } else if (drive_state->functions == 8) {
+        mot->angle = 90.0/180*M_PI;
+        drive_state->state = drive_turn;
+    } else if (drive_state->functions == 9) {
+        mot->dist = 1;
+        rstate->line_state[1] = 'r';
+        drive_state->state = drive_fwl;
+
+
+    } else if (drive_state->functions == 10) {
+        mot->dist = 1;
+        rstate->line_state[1] = 'm';
+        drive_state->state = drive_fwl;
+
+        if (det->crossing_line == 1) {
+            drive_state->functions += 1;
+        }
+    } else {
+        det->mis_state = 2;
+        det->crossed_lines = 0;
+        drive_state->functions = 0;
+    }
+}
+void third_mission(motiontype *mot, odotype *odo, smtype *drive_state, detectors *det, robot_state *rstate) {
+    if (drive_state->functions == 0) {
+        mot->dist = 0.5;
+        rstate->line_state[1] = 'm';
+        drive_state->state = drive_fwl;
+
+    } else if (drive_state->functions == 1){
+        mot->dist = 2;
+        rstate->line_state[1] = 'm';
+        drive_state->state = drive_fwl;
+
+        if (det->crossing_line == 1) {
+            drive_state->functions = 2;
+        }
+    } else if (drive_state->functions == 2) {
+        mot->dist = 0.2;
+        drive_state->state = drive_fwd;
+    } else if (drive_state->functions == 3) {
+        mot->angle = 90.0/180*M_PI;
+        drive_state->state = drive_turn;
+    } else {
+        det->mis_state = 3;
+        det->crossed_lines = 0;
+        drive_state->functions = 0;
+    }
+}
+void fourth_mission(motiontype *mot, odotype *odo, smtype *drive_state, detectors *det, robot_state *rstate) {
+    if (drive_state->functions == 0) {
+        mot->dist = 2;
+        rstate->line_state[1] = 'm';
+        drive_state->state = drive_fwl;
+    } else {
+        det->mis_state = 4;
+        det->crossed_lines = 0;
+        drive_state->functions = 0;
+    }
+}
+void fifth_mission(motiontype *mot, odotype *odo, smtype *drive_state, detectors *det, robot_state *rstate) {
+    if (drive_state->functions == 0) {
+        mot->dist = 3;
+        rstate->line_state[0] = 'b';
+        rstate->line_state[1] = 'm';
+        drive_state->state = drive_fwl;
+
+        if (det->crossing_line == 1) {
+            drive_state->functions = 1;
+        }
+    } else if (drive_state->functions == 1) {
+        mot->dist = 0.1;
+        rstate->line_state[0] = 'w';
+        rstate->line_state[0] = 'm';
+        drive_state->state = drive_fwd;
+
+    } else if (drive_state->functions == 2) {
+        mot->dist = 1;
+        drive_state->state = drive_fwl;
+
+    } else if (drive_state->functions == 3) {
+        mot->dist = 2;
+        drive_state->state = drive_fwl;
+
+        if (det->line_end == 1) {
+            drive_state->functions = 4;
+        }
+    } else {
+        det->mis_state = 5;
+        det->crossed_lines = 0;
+        drive_state->functions = 0;
+    }
+}
+void sixth_mission(motiontype *mot, odotype *odo, smtype *drive_state, detectors *det, robot_state *rstate) {
+    if (drive_state->functions == 0) {
+        mot->dist = 0.5;
+        rstate->line_state[0] = 'b';
+        drive_state->state = drive_fwl;
+
+        if (det->crossing_line == 1) {
+            drive_state->functions == 1;
+        }
+    } else if (drive_state->functions == 1) {
+        mot->angle = -90.0/180*M_PI;
+        drive_state->state = drive_turn;
+    } else if (drive_state->functions == 2) {
+        mot->dist = 5;
+        drive_state->state = drive_fwl;
+
+        if (det->obstacle_det_ir == 1) {
+            drive_state->state = drive_end;
+        }
+    }
+}
+
+
 
 void make_square(motiontype *mot, odotype *odo, smtype *drive_state, detectors *det, robot_state *rstate) {
     mot->dist = 1;
@@ -1062,26 +1216,3 @@ void make_square(motiontype *mot, odotype *odo, smtype *drive_state, detectors *
 }
 
 
-void detect_white_line(motiontype *mot, odotype *odo, smtype *drive_state, detectors *det, robot_state *rstate) {
-    if (drive_state->functions == 0) {
-        mot->dist = 0.5;
-        rstate->line_state[0] = 'b';
-        drive_state->state = drive_fwl;
-
-        if (det->crossing_line == 1) {
-            drive_state->functions = 1;
-        }
-    } else if (drive_state->functions == 1) {
-        mot->dist = 0.3;
-        rstate->line_state[0] = 'w';
-        drive_state->state = drive_fwd;
-    } else if (drive_state->functions == 2) {
-        mot->dist = 2;
-        rstate->line_state[1] = 'm';
-        drive_state->state = drive_fwl;
-
-        if (det->line_end == 1) {
-            drive_state->state = drive_end;
-        }
-    }
-}
