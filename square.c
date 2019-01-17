@@ -984,30 +984,31 @@ double get_control_fwl(motiontype *mot, smtype *sm) {
 
 double get_control_hugleft(motiontype *mot, odotype *odo, smtype *sm, double *ir_calib_sensor_values, robot_state *rstate) {
     //d : Hug distance
-    double d = 0.20;
-    // maximum distance value from ir
+    double d = 0.2;
+    //
     double d_IRmax = 0.93;
-    // omega turn : angular velocity depends driving speed and desired turning radius
-    double omega_turn = rstate->speed / (d + WHEEL_SEPARATION / 2.0);
+    //omega_turn : Angular velocity depends on driving speed and desired turning radius
+    double omega_turn = rstate->speed / (d + WHEEL_SEPARATION / 2.0 );
+    // kp is calculated as a proportional gain so
+    // that differential speed saturates based on the maximum sensor value.
     double kp = 10*(WHEEL_SEPARATION * omega_turn / 2.0) / (d_IRmax - d);
     double ki = 0.001;
-    double satlim = (WHEEL_SEPARATION * rstate->speed)/(WHEEL_SEPARATION/2.0 + d + 0.1);
-    double e = (ir_calib_sensor_values[0] -d);
-
+    printf(" %f \n", ir_calib_sensor_values[0]);
+    double satlim = (WHEEL_SEPARATION*rstate->speed)/(WHEEL_SEPARATION/2.0+d+0.1);
+    double e = (ir_calib_sensor_values[0] - d);
     mot->inte_hug_left += e;
-
-    if (mot->inte_hug_left * ki > 0.01){
+    if (mot->inte_hug_left*ki>0.01){
         mot->inte_hug_left = 0.01/ki;
-    }
-    double delta_U = e*kp + mot->inte_hug_left * ki;
 
+    }
+    double delta_U = e * kp + mot->inte_hug_left * ki;
+    //Divide by two to assign half to each wheel
     if (delta_U > (satlim/2.0)) {
         delta_U = satlim/2.0;
     }
 
-    return delta_U;
+    return delta_U ;
 }
-
 /****************************************
  / Detecting functions
 */
@@ -1328,6 +1329,7 @@ void fourth_mission(motiontype *mot, odotype *odo, smtype *drive_state, detector
         drive_state->state = drive_fwd;
     } else if (drive_state->functions == 4) {
         mot->dist = 10;
+        rstate->speed = 0.2;
         drive_state->state = drive_hugleft;
 
         if (det->line_detected == 1) {
