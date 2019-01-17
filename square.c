@@ -79,6 +79,12 @@ typedef struct {
 
     // Crossing a line
     int crossing_line;
+
+    // Line end
+    int line_end;
+
+    // Line detect
+    int line_detected;
 }detectors;
 
 /********************************************
@@ -87,7 +93,7 @@ typedef struct {
 
 typedef struct {
     char line_state[2];
-
+    double speed;
     double ir_dist_obstacle_det;
 }robot_state;
 
@@ -221,7 +227,7 @@ double get_control_fwl(motiontype *mot, smtype *sm);
 
 void competition_track(motiontype *mot, odotype *odo, smtype *drive_state, detectors *det, robot_state *rstate);
 void make_square(motiontype *mot, odotype *odo, smtype *drive_state, detectors *det, robot_state *rstate);
-
+void detect_white_line(motiontype *mot, odotype *odo, smtype *drive_state, detectors *det, robot_state *rstate);
 // SMR input/output data
 
 symTableElement *inputtable,*outputtable;
@@ -245,7 +251,7 @@ int main()
     // Calibration for robot 6
 //    int running, n=0, arg, time=0, black=54, white=75;
     int running, arg, time=0, black=85, white=255;
-    double speed=0.4, acceleration=0.5, angular_acceleration=1, threshold_crossing_limit = 0.2;
+    double acceleration=0.5, angular_acceleration=1, threshold_crossing_limit = 0.2;
     int log_laser = 1, log_motion = 0, log_linesensor = 0;
 
     // Motion controls
@@ -253,6 +259,9 @@ int main()
 
     // Distance for obstacle detection
     rstate.ir_dist_obstacle_det = 0.2;
+
+    // Motion speed
+    rstate.speed = 0.4;
 
     // States
     rstate.line_state[0] = 'b';
@@ -426,8 +435,9 @@ int main()
         /******************************
         /  THE MISSION BEING RUNNED!
         */
-        competition_track(&mot, &odo, &drive_state, &det, &rstate);
+//        competition_track(&mot, &odo, &drive_state, &det, &rstate);
 //        make_square(&mot, &odo, &drive_state, &det, &rstate);
+        detect_white_line(&mot, &odo, &drive_state, &det, &rstate);
 
         /****************************************
         / Update mission
@@ -484,10 +494,10 @@ int main()
         mot.reg_fwl_line = get_control_fwl(&mot, &drive_state);
 
         // Incrementing speed to achieve specific acceleration 3.4
-        if (mot.speed_step < speed) {
+        if (mot.speed_step < rstate.speed) {
             mot.speed_step += acceleration/100;
         } else {
-            mot.speed_step = speed;
+            mot.speed_step = rstate.speed;
         }
 
         update_motcon(&mot, &odo);
@@ -727,8 +737,10 @@ void update_motcon(motiontype *p, odotype *odo){
                 p->motorspeed_r=0;
             }
             else {
+                printf("The constant added to speed depending on co_mass: %f", p->reg_fwl_line);
                 p->motorspeed_r = p->speed_step - p->reg_fwl_line;
                 p->motorspeed_l = p->speed_step + p->reg_fwl_line;
+
             }
             break;
     }
@@ -848,7 +860,19 @@ double co_mass(double *calib, char *line_state, detectors *det) {
     if (denominator <= 2) {
         det->crossing_line = 1;
         return 0;
-    };
+    }
+
+    if (denominator <= 7.5 && denominator >= 2) {
+        det->line_detected = 1;
+    }
+
+    // Detect a line end
+    if (denominator >= 7.5) {
+        det->line_end = 1;
+        return 0;
+    }
+
+//    printf("The denominator for co mass: %f\n",denominator);
 
     return (numerator/denominator) - center;
 }
@@ -863,7 +887,7 @@ double get_control_fwd(motiontype *mot, odotype *odo, smtype *sm) {
 }
 
 double get_control_fwl(motiontype *mot, smtype *sm) {
-    double prop = 0.5 * mot->co_mass;
+    double prop = 0.2 * mot->co_mass;
     mot->inte_fwl_line += 0.04 * mot->co_mass*0.01;
     double derivative = 0.005 * (mot->co_mass - mot->last_error_fwl)/0.01;
     mot->last_error_fwl = mot->co_mass;
@@ -921,6 +945,10 @@ void competition_track(motiontype *mot, odotype *odo, smtype *drive_state, detec
             mot->dist = 1.45;
             rstate->line_state[1] = 'm';
             drive_state->state = drive_fwl;
+
+            if (det->line_end == 1) {
+                drive_state->state = drive_end;
+            }
         } else if (drive_state->functions == 1) {
             mot->angle = -180.0/180*M_PI;
             drive_state->state = drive_turn;
@@ -998,10 +1026,10 @@ void competition_track(motiontype *mot, odotype *odo, smtype *drive_state, detec
 
     }
 
-    printf("Time: (%d) || mission func incre: %d, angle: %f, drive_state: %d, angle turn: %f, negative_fork: %d, mission_state: %d, "
-           "startpos: %f, distance gone: %f, motiontype dist: %f, crossing_line: %d\n", drive_state->time,
-           drive_state->functions, odo->angle_pos_mission, drive_state->state, mot->angle, det->negative_fork, det->mis_state,
-           mot->startpos, ((mot->right_pos + mot->left_pos)/2 - mot->startpos), mot->dist, det->crossing_line);
+//    printf("Time: (%d) || mission func incre: %d, angle: %f, drive_state: %d, angle turn: %f, negative_fork: %d, mission_state: %d, "
+//           "startpos: %f, distance gone: %f, motiontype dist: %f, crossing_line: %d\n", drive_state->time,
+//           drive_state->functions, odo->angle_pos_mission, drive_state->state, mot->angle, det->negative_fork, det->mis_state,
+//           mot->startpos, ((mot->right_pos + mot->left_pos)/2 - mot->startpos), mot->dist, det->crossing_line);
 }
 
 void make_square(motiontype *mot, odotype *odo, smtype *drive_state, detectors *det, robot_state *rstate) {
@@ -1031,4 +1059,29 @@ void make_square(motiontype *mot, odotype *odo, smtype *drive_state, detectors *
            "startpos: %f, distance gone: %f, motiontype dist: %f, crossing_line: %d\n", drive_state->time,
            drive_state->functions, odo->angle_pos_mission, drive_state->state, mot->angle, det->negative_fork, det->mis_state,
            mot->startpos, ((mot->right_pos + mot->left_pos)/2 - mot->startpos), mot->dist, det->crossing_line);
+}
+
+
+void detect_white_line(motiontype *mot, odotype *odo, smtype *drive_state, detectors *det, robot_state *rstate) {
+    if (drive_state->functions == 0) {
+        mot->dist = 0.5;
+        rstate->line_state[0] = 'b';
+        drive_state->state = drive_fwl;
+
+        if (det->crossing_line == 1) {
+            drive_state->functions = 1;
+        }
+    } else if (drive_state->functions == 1) {
+        mot->dist = 0.3;
+        rstate->line_state[0] = 'w';
+        drive_state->state = drive_fwd;
+    } else if (drive_state->functions == 2) {
+        mot->dist = 2;
+        rstate->line_state[1] = 'm';
+        drive_state->state = drive_fwl;
+
+        if (det->line_end == 1) {
+            drive_state->state = drive_end;
+        }
+    }
 }
