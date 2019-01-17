@@ -307,7 +307,7 @@ int main()
 
     // Detectors states
     det.crossed_lines = 0;
-    det.mis_state = 3;
+    det.mis_state = 0;
     det.old_mis_state = 0;
 
     // Initialize center of mass previous value
@@ -580,7 +580,7 @@ int main()
 //                norm_linesensor_values[3], norm_linesensor_values[4], norm_linesensor_values[5], norm_linesensor_values[6]
 //                , norm_linesensor_values[7]);
 
-        printf("%f\n", laserpar[8]);
+//        printf("%f\n", laserpar[8]);
 
 
 
@@ -862,6 +862,7 @@ void sm_update(smtype *p, motiontype *mot, odotype *c, detectors *det){
         mot->last_error_fwl = 0;
         mot->inte_move_fwd = 0;
         mot->inte_hug_left = 0;
+        det->pillar_gate_det = 0;
         printf("Resets mission\n");
         mot->speed_step=0;
         c->left_pos_dec=0;
@@ -935,7 +936,7 @@ double co_mass(double *calib, char *line_state, detectors *det) {
 //    printf("The denominator for co mass: %f\n",denominator);
 
     // To avoid nans and detect lines
-    if (denominator <= 2) {
+    if (denominator <= 3) {
         det->crossing_line = 1;
         return 0;
     } else {
@@ -973,7 +974,7 @@ double get_control_fwd(motiontype *mot, odotype *odo, smtype *sm) {
 double get_control_fwl(motiontype *mot, smtype *sm) {
     double prop = 0.2 * mot->co_mass;
     mot->inte_fwl_line += 0.04 * mot->co_mass*0.01;
-    double derivative = 0.0005 * (mot->co_mass - mot->last_error_fwl)/0.01;
+    double derivative = 0.005 * (mot->co_mass - mot->last_error_fwl)/0.01;
     mot->last_error_fwl = mot->co_mass;
 
 //    printf("prop: %f, integral: %f, derivative: %f, co_mass: %f\n", prop, mot->inte_fwl_line, derivative, mot->co_mass);
@@ -1236,11 +1237,12 @@ void second_mission(motiontype *mot, odotype *odo, smtype *drive_state, detector
         drive_state->state = drive_turn;
     } else if (drive_state->functions == 20) {
         rstate->line_state[1] = 'm';
-        mot->dist = 1;
+        mot->dist = 1.25;
         drive_state->state = drive_fwl;
+
     }  else if (drive_state->functions == 21) {
         mot->dist = 2;
-        rstate->line_state[1] = 'r';
+        rstate->line_state[1] = 'm';
 
         if (det->crossing_line == 1) {
             drive_state->functions = 22;
@@ -1269,7 +1271,7 @@ void third_mission(motiontype *mot, odotype *odo, smtype *drive_state, detectors
     } else if (drive_state->functions == 1){
         mot->dist = mot->laser_dist;
         drive_state->state = drive_fwl;
-        printf("dist: %f\n", mot->dist);
+//        printf("dist: %f\n", mot->dist);
     } else if (drive_state->functions == 2) {
         mot->angle = 90.0/180.0*M_PI;
         drive_state->state = drive_turn;
@@ -1321,13 +1323,28 @@ void fourth_mission(motiontype *mot, odotype *odo, smtype *drive_state, detector
         drive_state->state = drive_turn;
     } else if (drive_state->functions == 3) {
         mot->dist = 0.4;
+        mot->speedcmd = 0.2;
+        rstate->speed = 0.2;
         drive_state->state = drive_fwd;
     } else if (drive_state->functions == 4) {
         mot->dist = 10;
         drive_state->state = drive_hugleft;
-    }
 
-    else {
+        if (det->line_detected == 1) {
+            drive_state->functions = 5;
+        }
+    } else if (drive_state->functions == 5) {
+        mot->dist = 0.2;
+        mot->speedcmd = 0.4;
+        rstate->speed = 0.4;
+        drive_state->state = drive_fwd;
+    } else if (drive_state->functions == 6) {
+        mot->angle = 50.0/180.0*M_PI;
+        drive_state->state = drive_turn;
+    } else if (drive_state->functions == 7) {
+        mot->dist = 0.2;
+        drive_state->state = drive_fwl;
+    } else {
         det->mis_state = 4;
         det->crossed_lines = 0;
         drive_state->functions = 0;
