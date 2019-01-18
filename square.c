@@ -1008,7 +1008,7 @@ double get_control_hugleft(motiontype *mot, odotype *odo, smtype *sm, double *ir
     double kp = 10*(WHEEL_SEPARATION * omega_turn / 2.0) / (d_IRmax - d);
     double ki = 0.001;
 //    printf(" %f \n", ir_calib_sensor_values[0]);
-    double satlim = (WHEEL_SEPARATION*rstate->speed)/(WHEEL_SEPARATION/2.0+d+0.1);
+    double satlim = (WHEEL_SEPARATION*rstate->speed)/(WHEEL_SEPARATION/2.0 + d + 0.1);
     double e = (ir_calib_sensor_values[0] - d);
     mot->inte_hug_left += e;
     if (mot->inte_hug_left*ki>0.01){
@@ -1448,8 +1448,6 @@ void sixth_mission(motiontype *mot, odotype *odo, smtype *drive_state, detectors
         }
     }
 }
-
-
 
 void make_square(motiontype *mot, odotype *odo, smtype *drive_state, detectors *det, robot_state *rstate) {
     mot->dist = 1;
