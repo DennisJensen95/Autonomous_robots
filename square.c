@@ -99,6 +99,8 @@ typedef struct {
     char pillar_det[1];
     double speed;
     double ir_dist_obstacle_det;
+
+    double laser_measure_front;
 }robot_state;
 
 /*****************************************
@@ -186,7 +188,7 @@ typedef struct{//input
     double last_itera_linesensor[7];
 
     // Laser distance
-    double laser_dist;
+    double laser_dist_to_go;
 
 }motiontype;
 
@@ -209,13 +211,18 @@ void calib_ir_sensor(symTableElement *irsensor, double *ir_calib_sensor_values);
 double co_mass(double *calib, char *line_state, detectors *det);
 
 /********************************************
-* Initializations
+* Detection functions
 */
 int pillar_detect(double *laserpar, char *g, motiontype *mot);
-int crossing_line(double *calib, double threshold_crossing_limit);
 int ir_detect(double *ir_calib, double ir_dist);
 int detect_negative_fork(motiontype *mot);
-int hugleft(double dist, double speed, int time);
+int crossing_line(double *calib, double threshold_crossing_limit);
+
+/********************************************
+* Measure functions
+*/
+
+double get_distance_meas_front(double *laserpar);
 
 
 /********************************************
@@ -452,8 +459,12 @@ int main()
 
         // Update pillar detection
         if (det.pillar_gate_det == 0 && drive_state.time >= 70) {
-            printf("Update pillar detection\n");
+//            printf("Update pillar detection\n");
             det.pillar_gate_det = pillar_detect(laserpar, rstate.pillar_det, &mot);
+        }
+
+        if (det.mis_state == 0) {
+            rstate.laser_measure_front = get_distance_meas_front(laserpar);
         }
 
         // Find center of mass
@@ -703,7 +714,8 @@ void update_motcon(motiontype *p, odotype *odo) {
             p->motorspeed_l = 0;
             p->motorspeed_r = 0;
             break;
-        case mot_move:
+
+            case mot_move:
 
             if (fabs((p->right_pos + p->left_pos) / 2 - p->startpos) > p->dist) {
                 p->finished = 1;
@@ -713,7 +725,7 @@ void update_motcon(motiontype *p, odotype *odo) {
                 p->motorspeed_l = p->vmax + p->reg_move_fwd;
                 p->motorspeed_r = p->vmax - p->reg_move_fwd;
             }
-                // Moving backwards with deceleration.
+            // Moving backwards with deceleration.
             else if (p->speed_step < 0) {
                 if (fabs(mot.speed_step) > p->vmax) {
                     p->motorspeed_l = -p->vmax + p->reg_move_fwd;
@@ -863,7 +875,7 @@ void sm_update(smtype *p, motiontype *mot, odotype *c, detectors *det){
         mot->inte_move_fwd = 0;
         mot->inte_hug_left = 0;
         det->pillar_gate_det = 0;
-        printf("Resets mission\n");
+//        printf("Resets mission\n");
         mot->speed_step=0;
         c->left_pos_dec=0;
         c->right_pos_dec=0;
@@ -957,9 +969,11 @@ double co_mass(double *calib, char *line_state, detectors *det) {
         det->line_end = 0;
     }
 
-
-
     return (numerator/denominator) - center;
+}
+
+double get_distance_meas_front(double *laserpar) {
+    return laserpar[4];
 }
 
 /****************************************
@@ -993,7 +1007,7 @@ double get_control_hugleft(motiontype *mot, odotype *odo, smtype *sm, double *ir
     // that differential speed saturates based on the maximum sensor value.
     double kp = 10*(WHEEL_SEPARATION * omega_turn / 2.0) / (d_IRmax - d);
     double ki = 0.001;
-    printf(" %f \n", ir_calib_sensor_values[0]);
+//    printf(" %f \n", ir_calib_sensor_values[0]);
     double satlim = (WHEEL_SEPARATION*rstate->speed)/(WHEEL_SEPARATION/2.0+d+0.1);
     double e = (ir_calib_sensor_values[0] - d);
     mot->inte_hug_left += e;
@@ -1041,15 +1055,15 @@ int ir_detect(double *ir_calib, double ir_dist) {
 
 int pillar_detect(double *laserpar, char *g, motiontype *mot) {
     if (g[0] == 'l' && laserpar[0] < 0.8) {
-        printf("distance left laser: %f\n", laserpar[0]);
-        mot->laser_dist = laserpar[0] * sin(20.0/180.0*M_PI) + 0.45;
+//        printf("distance left laser: %f\n", laserpar[0]);
+        mot->laser_dist_to_go = laserpar[0] * sin(20.0/180.0*M_PI) + 0.45;
         return 1;
     } else if (g[0] == 'r' && laserpar[8] < 0.3) {
-        printf("distance right laser: %f\n", laserpar[8]);
-        mot->laser_dist = laserpar[8] * sin(20.0/180.0*M_PI) + 0.6;
+//        printf("distance right laser: %f\n", laserpar[8]);
+        mot->laser_dist_to_go = laserpar[8] * sin(20.0/180.0*M_PI) + 0.6;
         return 1;
     } else if (g[0] == 'g' && laserpar[0] < 1.1 && laserpar[8] < 1.1) {
-        printf("I went through a gate\n");
+//        printf("I went through a gate\n");
         return 1;
     } else {
         return 0;
@@ -1098,38 +1112,50 @@ void competition_track(motiontype *mot, odotype *odo, smtype *drive_state, detec
         sixth_mission(mot, odo, drive_state, det, rstate);
     }
 
-    printf("Time: (%d) || mission func incre: %d, angle: %f, drive_state: %d, angle turn: %f, negative_fork: %d, mission_state: %d, "
-           "startpos: %f, distance gone: %f, motiontype dist: %f, crossing_line: %d, line detection: %d, line end detection: %d"
-           ", obstacle detection: %d, pillar detection: %d\n", drive_state->time,
-           drive_state->functions, odo->angle_pos_mission, drive_state->state, mot->angle, det->negative_fork, det->mis_state,
-           mot->startpos, ((mot->right_pos + mot->left_pos)/2 - mot->startpos), mot->dist, det->crossing_line,
-           det->line_detected, det->line_end, det->obstacle_det_ir, det->pillar_gate_det);
+//    printf("Time: (%d) || mission func incre: %d, angle: %f, drive_state: %d, angle turn: %f, negative_fork: %d, mission_state: %d, "
+//           "startpos: %f, distance gone: %f, motiontype dist: %f, crossing_line: %d, line detection: %d, line end detection: %d"
+//           ", obstacle detection: %d, pillar detection: %d\n", drive_state->time,
+//           drive_state->functions, odo->angle_pos_mission, drive_state->state, mot->angle, det->negative_fork, det->mis_state,
+//           mot->startpos, ((mot->right_pos + mot->left_pos)/2 - mot->startpos), mot->dist, det->crossing_line,
+//           det->line_detected, det->line_end, det->obstacle_det_ir, det->pillar_gate_det);
 }
 
 void first_mission(motiontype *mot, odotype *odo, smtype *drive_state, detectors *det, robot_state *rstate) {
+//    printf("Position x: %f\n", odo->x_pos);
+//    printf("Position y: %f\n", odo->y_pos);
     if (drive_state->functions == 0) {
-        mot->dist = 1.45;
+        mot->dist = 4;
         rstate->line_state[1] = 'm';
         drive_state->state = drive_fwl;
 
-        if (det->line_end == 1) {
-            drive_state->state = drive_end;
+        if (det->crossing_line == 1) {
+            drive_state->functions = 1;
         }
     } else if (drive_state->functions == 1) {
-        mot->angle = -180.0/180*M_PI;
-        drive_state->state = drive_turn;
+        drive_state->state = drive_idle;
+        printf("Distance from start in odemetry x to crossing line: %f\n"
+               "Distance from crossing line to box with laser: %f\n"
+               "Distance from start to box is: %f\n",
+               fabs(odo->y_pos), rstate->laser_measure_front, fabs(odo->y_pos) + rstate->laser_measure_front + 0.23);
+
+        if (drive_state->time == 60) {
+            drive_state->functions = 2;
+        }
     } else if (drive_state->functions == 2) {
+        mot->angle = 180.0/180.0*M_PI;
+        drive_state->state = drive_turn;
+    } else if (drive_state->functions == 3) {
         mot->dist = 2;
         rstate->line_state[1] = 'm';
         drive_state->state = drive_fwl;
 
         if (det->negative_fork == 1) {
-            drive_state->functions = 3;
+            drive_state->functions = 4;
         }
-    } else if (drive_state->functions == 3) {
+    } else if (drive_state->functions == 4) {
         mot->dist = 0.2;
         drive_state->state = drive_fwd;
-    } else if (drive_state->functions == 4) {
+    } else if (drive_state->functions == 5) {
         mot->angle = -120.0 / 180 * M_PI;
         drive_state->state = drive_turn;
     } else {
@@ -1270,7 +1296,7 @@ void third_mission(motiontype *mot, odotype *odo, smtype *drive_state, detectors
         }
 
     } else if (drive_state->functions == 1){
-        mot->dist = mot->laser_dist;
+        mot->dist = mot->laser_dist_to_go;
         drive_state->state = drive_fwl;
 //        printf("dist: %f\n", mot->dist);
     } else if (drive_state->functions == 2) {
@@ -1317,7 +1343,7 @@ void fourth_mission(motiontype *mot, odotype *odo, smtype *drive_state, detector
             drive_state->functions = 1;
         }
     } else if (drive_state->functions == 1) {
-        mot->dist = mot->laser_dist;
+        mot->dist = mot->laser_dist_to_go;
         drive_state->state = drive_fwl;
     } else if (drive_state->functions == 2) {
         mot->angle = 90.0/180.0*M_PI;
@@ -1404,13 +1430,16 @@ void sixth_mission(motiontype *mot, odotype *odo, smtype *drive_state, detectors
         rstate->line_state[0] = 'b';
         drive_state->state = drive_fwl;
 
-        if (det->crossing_line == 1) {
-            drive_state->functions == 1;
+        if (det->line_detected == 1 && drive_state->time >= 100) {
+            drive_state->functions = 1;
         }
     } else if (drive_state->functions == 1) {
+        mot->dist = 0.2;
+        drive_state->state = drive_fwd;
+    } else if (drive_state->functions == 2) {
         mot->angle = -90.0/180*M_PI;
         drive_state->state = drive_turn;
-    } else if (drive_state->functions == 2) {
+    } else if (drive_state->functions == 3) {
         mot->dist = 5;
         drive_state->state = drive_fwl;
 
