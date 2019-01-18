@@ -979,9 +979,15 @@ void norm_linesensor(symTableElement *linesensor, double  *norm_values, double *
 
 void calib_ir_sensor(symTableElement *irsensor, double *ir_calib_sensor_values){
     int i;
+
+    // SMR 11
 //    double Ka = 15.8463, Kb = 74.6344;
-    double Ka[5] = {14.07, 13.17, 13.73, 13.44, 14.49};
-    double Kb[5] = {65.36, 46.78, 79.07, 60.97, 80.92};
+//    double Ka[5] = {14.07, 13.17, 13.73, 13.44, 14.49};
+//    double Kb[5] = {65.36, 46.78, 79.07, 60.97, 80.92};
+
+    // Simulation
+    double Ka[5] = {15.8463, 15.8463, 15.8463, 15.8463, 15.8463};
+    double Kb[5] = {74.6344, 74.6344, 74.6344, 74.6344, 74.6344};
     for (i = 0; i < 5; i++){
         ir_calib_sensor_values[i] = Ka[i]/(irsensor->data[i] - Kb[i]);
     }
@@ -1045,8 +1051,8 @@ double get_control_fwd(motiontype *mot, odotype *odo, smtype *sm) {
 }
 
 double get_control_fwl(motiontype *mot, smtype *sm) {
-    double prop = 0.2 * mot->co_mass;
-    mot->inte_fwl_line += 0.04 * mot->co_mass*0.01;
+    double prop = 0.3 * mot->co_mass;
+    mot->inte_fwl_line += 0.08 * mot->co_mass*0.01;
     double derivative = 0.005 * (mot->co_mass - mot->last_error_fwl)/0.01;
     mot->last_error_fwl = mot->co_mass;
 
@@ -1159,7 +1165,7 @@ void competition_track(motiontype *mot, odotype *odo, smtype *drive_state, detec
 //    printf("%d", det->mis_state);
     // Mission 1n measure obstacle
     if (det->mis_state == 0) {
-        first_mission(mot, odo, drive_state, det, rstate);
+        skip_first_mission(mot, odo, drive_state, det, rstate);
     }
 
     // Mission 2
@@ -1277,12 +1283,8 @@ void second_mission(motiontype *mot, odotype *odo, smtype *drive_state, detector
             drive_state->functions = 7;
         }
     } else if (drive_state->functions == 7) {
-        mot->dist = 1;
+        mot->dist = 0.2;
         drive_state->state = drive_fwl;
-
-        if (det->line_end == 1) {
-            drive_state->functions = 8;
-        }
     } else if (drive_state->functions == 8) {
         mot->speedcmd = -0.4;
         rstate->speed = -0.4;
@@ -1527,13 +1529,10 @@ void sixth_mission(motiontype *mot, odotype *odo, smtype *drive_state, detectors
 
 void skip_first_mission(motiontype *mot, odotype *odo, smtype *drive_state, detectors *det, robot_state *rstate) {
     if (drive_state->functions == 0) {
-        mot->dist = 4;
-        rstate->line_state[1] = 'm';
+        mot->dist = 1;
+        rstate->line_state[1] = 'l';
         drive_state->state = drive_fwl;
 
-        if (det->crossing_line == 1) {
-            drive_state->functions = 1;
-        }
     } else {
         det->mis_state = 1;
         det->crossed_lines = 0;
