@@ -485,7 +485,7 @@ int main()
         }
 
         // Edge detection
-        printf("edge detection: %f\n",edge_detection(norm_linesensor_values, rstate.line_state));
+//        printf("edge detection: %f\n",edge_detection(norm_linesensor_values, rstate.line_state));
 
         // Find center of mass
         mot.co_mass = co_mass(norm_linesensor_values, rstate.line_state, &det);
@@ -508,10 +508,10 @@ int main()
         /******************************
         /  THE MISSION BEING RUNNED!
         */
-//        competition_track(&mot, &odo, &drive_state, &det, &rstate);
+        competition_track(&mot, &odo, &drive_state, &det, &rstate);
 //        make_square(&mot, &odo, &drive_state, &det, &rstate);
 //        following_white_line(&mot, &odo, &drive_state, &det, &rstate);
-        follow_line(&mot, &odo, &drive_state, &det, &rstate);
+//        follow_line(&mot, &odo, &drive_state, &det, &rstate);
 
         /****************************************
         / Update mission
@@ -577,7 +577,7 @@ int main()
         mot.reg_move_fwd = get_control_fwd(&mot, &odo, &drive_state);
         mot.reg_fwl_line = get_control_fwl(&mot, &drive_state);
         mot.reg_edge = get_control_edge(&mot, &drive_state);
-        printf("%f\n", mot.reg_edge);
+//        printf("%f\n", mot.reg_edge);
         mot.reg_hug_left = get_control_hugleft(&mot, &odo, &drive_state, ir_calib_sensor_values, &rstate);
         mot.reg_gate = get_control_gate(laserpar);
 
@@ -835,8 +835,8 @@ void update_motcon(motiontype *p, odotype *odo) {
                 p->motorspeed_r = 0;
             } else {
 //                printf("The constant added to speed depending on co_mass: %f", p->reg_fwl_line);
-                p->motorspeed_r = p->speed_step - p->reg_fwl_line - p->reg_edge;
-                p->motorspeed_l = p->speed_step + p->reg_fwl_line + p->reg_edge;
+                p->motorspeed_r = p->speed_step - p->reg_fwl_line + p->reg_edge;
+                p->motorspeed_l = p->speed_step + p->reg_fwl_line - p->reg_edge;
 
             }
             break;
@@ -1014,6 +1014,12 @@ double co_mass(double *calib, char *line_state, detectors *det) {
     printf("l1: %f, l2: %f, l3: %f, l4: %f, l5 %f, l6: %f, l7: %f, l8: %f\n", calib[0], calib[1],
             calib[2], calib[3], calib[4], calib[5], calib[6], calib[7]);
 
+//    if (line_state[1] == 'l') {
+//        center = 3.8;
+//    } else if (line_state[1] == 'r') {
+//        center = 3.2;
+//    }
+
     for (i = 0; i < 8; i++) {
         numerator += calib[i] * i;
         denominator += calib[i];
@@ -1053,6 +1059,7 @@ double edge_detection(double *calib, char *line_state) {
     int i;
     double array[8];
     double numerator = 0, denominator = 0, center = 0;
+
     for (i = 0; i < 7; i++) {
         array[i] = calib[i + 1] - calib[i];
     }
@@ -1073,6 +1080,8 @@ double edge_detection(double *calib, char *line_state) {
                 array[i] = fabs(array[i]);
             }
         }
+    } else {
+        return 0;
     }
 
     for (i = 0; i < 7; i++) {
@@ -1080,9 +1089,7 @@ double edge_detection(double *calib, char *line_state) {
         denominator += array[i];
     }
 
-    if (denominator <= 1.5) {
-        return 0;
-    } else if (denominator >= 6.5) {
+    if (denominator <= 0.1) {
         return 0;
     }
 
@@ -1107,14 +1114,14 @@ double get_control_fwl(motiontype *mot, smtype *sm) {
 //    printf("prop: %f, integral: %f, derivative: %f, co_mass: %f\n", prop, mot->inte_fwl_line, derivative, mot->co_mass);
 
     return prop + mot->inte_fwl_line + derivative;
-//    return 0;
 }
 
 double get_control_edge(motiontype *mot, smtype *sm) {
-    double prop = 5 * mot->co_edge;
+    double prop = 0.05 * mot->co_edge;
     printf("mot->edge: %f\n", mot->co_edge);
 
     return prop;
+//    return 0;
 }
 
 double get_control_hugleft(motiontype *mot, odotype *odo, smtype *sm, double *ir_calib_sensor_values, robot_state *rstate) {
@@ -1149,13 +1156,17 @@ double get_control_gate(double *laserpar) {
     // far away from gate
     double kp = 0.1;
 
-//    printf("l0: %f, l1: %f, l6: %f, l7: %f\n", laserpar[0], laserpar[1], laserpar[6], laserpar[7]);
+    printf("l0: %f, l1: %f, l6: %f, l7: %f\n", laserpar[0], laserpar[1], laserpar[6], laserpar[7]);
 
-    if (laserpar[0] <= 0.1 && laserpar[7] <= 0.1) {
+    if (laserpar[0] <= 0.2 && laserpar[7] <= 0.2) {
         return kp * fabs(laserpar[0] - laserpar[7]);
-    } else if (laserpar[1] <= 0.3 && laserpar[6] <= 0.3) {
+    } else if (laserpar[1] <= 0.5 && laserpar[6] <= 0.5) {
         return kp * fabs(laserpar[1] - laserpar[6]);
-    } else {
+    } else if (laserpar[2] <= 0.5 && laserpar[5] <= 0.5) {
+        return kp * fabs(laserpar[2] - laserpar[5]);
+    }
+
+    else {
         return 0;
     }
 
@@ -1221,7 +1232,7 @@ void competition_track(motiontype *mot, odotype *odo, smtype *drive_state, detec
 //    printf("%d", det->mis_state);
     // Mission 1n measure obstacle
     if (det->mis_state == 0) {
-        skip_first_mission(mot, odo, drive_state, det, rstate);
+        first_mission(mot, odo, drive_state, det, rstate);
     }
 
     // Mission 2
